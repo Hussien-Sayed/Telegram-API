@@ -1,12 +1,14 @@
 services:
   telegram-api:
     build: .
-    image: telegram-api:latest
     container_name: telegram-api
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - WHISPER_MODEL=${WHISPER_MODEL:-base}
       - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+      - UPLOADS_PATH=${UPLOADS_PATH:-uploads}
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
     restart: unless-stopped

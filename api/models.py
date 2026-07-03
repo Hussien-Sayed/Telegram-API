@@ -1,8 +1,8 @@
 """Pydantic request/response models for the Telegram API microservice."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SendMessageRequest(BaseModel):
@@ -83,6 +83,37 @@ class GetChatIdsParams(BaseModel):
     )
 
     limit: int = Field(10, ge=1, le=100)
+
+
+class SendFileRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "chat_id": 123456789,
+                "filename": "document.pdf",
+                "caption": "Here is the document you requested",
+                "file_type": "document",
+                "kwargs": {},
+            }
+        }
+    )
+
+    chat_id: int
+    filename: str
+    caption: Optional[str] = None
+    file_type: Literal["document", "photo", "video", "audio"]
+    kwargs: Optional[Dict[str, Any]] = None
+
+    @field_validator("file_type")
+    @classmethod
+    def validate_file_type(cls, v: str) -> str:
+        """Validate that file_type is one of the allowed values."""
+        allowed_types = {"document", "photo", "video", "audio"}
+        if v not in allowed_types:
+            raise ValueError(
+                f"file_type must be one of: {', '.join(sorted(allowed_types))}"
+            )
+        return v
 
 
 class MessageResponse(BaseModel):

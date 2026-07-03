@@ -9,6 +9,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Create uploads directory for file sending feature
+RUN mkdir -p /app/uploads
+
 # Install system dependencies required by openai-whisper
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 
@@ -20,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Run as a non-root user for security.
-RUN useradd -m appuser && chown -R appuser:appuser /app
+RUN useradd -m appuser && chown -R appuser:appuser /app && chmod -R 755 /app/uploads
 USER appuser
 
 EXPOSE 8000

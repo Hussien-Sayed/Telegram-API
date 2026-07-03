@@ -14,6 +14,7 @@ from .models import (
     MessageResponse,
     RemoveReplyKeyboardRequest,
     SendMessageRequest,
+    SendFileRequest,
     SendReplyKeyboardRequest,
     UpdatesResponse,
 )
@@ -72,6 +73,26 @@ def create_router(client: TelegramClient) -> APIRouter:
             message = await client.remove_reply_keyboard(
                 chat_id=request.chat_id,
                 text=request.text,
+                **(request.kwargs or {}),
+            )
+            return {
+                "success": True,
+                "message_id": getattr(message, "message_id", None),
+                "error": None,
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except TelegramError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @router.post("/send_file", response_model=MessageResponse)
+    async def send_file(request: SendFileRequest) -> Dict[str, Any]:
+        try:
+            message = await client.send_file(
+                chat_id=request.chat_id,
+                filename=request.filename,
+                caption=request.caption,
+                file_type=request.file_type,
                 **(request.kwargs or {}),
             )
             return {

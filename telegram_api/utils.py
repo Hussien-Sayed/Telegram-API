@@ -6,6 +6,7 @@ from typing import Any, List, Optional
 
 from telegram import (
     Bot,
+    InputFile,
     KeyboardButton,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
@@ -127,6 +128,74 @@ class TelegramClient:
             reply_markup=ReplyKeyboardRemove(),
             **kwargs,
         )
+
+    async def send_file(
+        self,
+        chat_id: int,
+        filename: str,
+        file_type: str,
+        caption: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Send a file to ``chat_id``.
+
+        The file is loaded from the ``uploads/`` directory.
+
+        ``file_type`` must be one of: ``document``, ``photo``, ``video``, ``audio``.
+
+        Extra keyword arguments are forwarded to the appropriate send method.
+        """
+        # Construct full file path
+        file_path = os.path.join("uploads", filename)
+
+        # Validate file exists
+        if not os.path.exists(file_path):
+            error_msg = f"File not found: {file_path}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Validate file_type
+        valid_file_types = {"document", "photo", "video", "audio"}
+        if file_type not in valid_file_types:
+            error_msg = f"Invalid file_type: {file_type}. Must be one of: {valid_file_types}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        logger.info(
+            "Sending %s to chat %s: %s (caption: %s)",
+            file_type,
+            chat_id,
+            filename,
+            caption,
+        )
+
+        try:
+            # Open file and create InputFile
+            with open(file_path, "rb") as f:
+                input_file = InputFile(f.read(), filename=filename)
+
+                # Use appropriate method based on file_type
+                if file_type == "document":
+                    return await self.bot.send_document(
+                        chat_id=chat_id, document=input_file, caption=caption, **kwargs
+                    )
+                elif file_type == "photo":
+                    return await self.bot.send_photo(
+                        chat_id=chat_id, photo=input_file, caption=caption, **kwargs
+                    )
+                elif file_type == "video":
+                    return await self.bot.send_video(
+                        chat_id=chat_id, video=input_file, caption=caption, **kwargs
+                    )
+                elif file_type == "audio":
+                    return await self.bot.send_audio(
+                        chat_id=chat_id, audio=input_file, caption=caption, **kwargs
+                    )
+        except TelegramError as exc:
+            logger.error(
+                "Failed to send %s to chat %s: %s", file_type, chat_id, exc
+            )
+            raise
 
     async def get_updates(
         self,

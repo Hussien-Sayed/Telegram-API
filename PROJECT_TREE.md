@@ -2,6 +2,14 @@
 
 ## Telegram-API
 
+uploads/
+└── .gitkeep [x]
+    ├── Functionality:
+    │   - Ensure the uploads folder is tracked in git
+    ├── Input:
+    │   - None
+    └── Output:
+        - Empty file
 api/
 ├── __init__.py [x]
 ├── main.py [x]
@@ -19,7 +27,7 @@ api/
 │       │   - app: FastAPI
 │       └── Output:
 │           - None
-├── models.py [x]
+├── models.py [*]
 │   ├── class SendMessageRequest [x]
 │   │   ├── Functionality:
 │   │   │   - Pydantic model for send_message endpoint
@@ -71,6 +79,19 @@ api/
 │   │   │   - limit: int = 10
 │   │   └── Output:
 │   │       - Validated Pydantic model instance
+│   ├── class SendFileRequest [x]
+│   │   ├── Functionality:
+│   │   │   - Pydantic model for send_file endpoint
+│   │   │   - Include json_schema_extra examples for Swagger UI
+│   │   │   - Validate file_type is one of: document, photo, video, audio
+│   │   ├── Input:
+│   │   │   - chat_id: int
+│   │   │   - filename: str
+│   │   │   - caption: Optional[str] = None
+│   │   │   - file_type: str
+│   │   │   - kwargs: Optional[Dict[str, Any]] = None
+│   │   └── Output:
+│   │       - Validated Pydantic model instance
 │   ├── class MessageResponse [x]
 │   │   ├── Functionality:
 │   │   │   - Pydantic model for message operation responses
@@ -98,7 +119,7 @@ api/
 │       │   - error: Optional[str] = None
 │       └── Output:
 │           - Validated Pydantic model instance
-├── router.py [x]
+├── router.py [*]
 │   ├── function create_router() [x]
 │   │   ├── Functionality:
 │   │   │   - Create an APIRouter with endpoints backed by the given TelegramClient
@@ -147,12 +168,26 @@ api/
 │       │   - limit: int
 │       └── Output:
 │           - Dict[str, Any]
-└── README.md [x]
+│   └── function send_file() [x]
+│       ├── Functionality:
+│       │   - Send file endpoint
+│       │   - Call client.send_file() with request parameters
+│       │   - Return MessageResponse with success status, message_id, and error details
+│       │   - Handle ValueError for validation errors (400 status)
+│       │   - Handle TelegramError for API errors (500 status)
+│       ├── Input:
+│       │   - request: SendFileRequest
+│       └── Output:
+│           - Dict[str, Any]
+└── README.md [*]
     ├── Functionality:
     │   - Document API endpoint reference
     │   - Document request/response schema
     │   - Provide concrete example requests for every route
     │   - Provide usage examples with curl or Python requests
+    │   - Add /send_file endpoint documentation
+    │   - Include request/response schema for send_file
+    │   - Provide example requests for each file type
     ├── Input:
     │   - None
     └── Output:
@@ -162,7 +197,7 @@ telegram_api/
 │   └── Functionality:
 │       - Export TelegramClient from utils
 │       - Define __all__ for package exports
-├── utils.py [x]
+├── utils.py [*]
 │   ├── function transcribe_voice() [x]
 │   │   ├── Functionality:
 │   │   │   - Async helper to transcribe voice messages using OpenAI Whisper
@@ -271,6 +306,26 @@ telegram_api/
 │           │   - None
 │           └── Output:
 │               - None
+│       └── method send_file() [x]
+│           ├── Functionality:
+│           │   - Send file to Telegram chat
+│           │   - Construct full file path from uploads folder and filename
+│           │   - Validate file exists at the path
+│           │   - Validate file_type is one of: document, photo, video, audio
+│           │   - Use appropriate python-telegram-bot method based on file_type
+│           │   - Pass file using InputFile from local path
+│           │   - Handle file not found, invalid file type, and Telegram API errors
+│           │   - Log file sending attempts and results
+│           ├── Input:
+│           │   - chat_id: int
+│           │   - filename: str
+│           │   - file_type: str
+│           │   - caption: Optional[str] = None
+│           │   - **kwargs: Any
+│           └── Output:
+│               - Message object from Telegram API
+│               - Raises ValueError if file not found or invalid file_type
+│               - Raises TelegramError on API failure
 ├── test.py [x]
 │   └── function main()
 │       ├── Functionality:
@@ -361,15 +416,23 @@ tests/
         │   - None
         └── Output:
             - None (assertion-based test)
-.dockerignore [x]
+.dockerignore [*]
+├── Functionality:
+│   - Optionally exclude uploads folder contents from Docker image
+├── Input:
+│   - None
+└── Output:
+    - Updated .dockerignore file
 Dockerfile [*]
 ├── Functionality:
 │   - Add apt-get install -y ffmpeg before pip install
 │   - ffmpeg is required for OpenAI Whisper audio processing
+│   - Add RUN mkdir -p /app/uploads after WORKDIR command
+│   - Add RUN chown -R appuser:appuser /app/uploads for permissions
 ├── Input:
 │   - None
 └── Output:
-    - Updated Dockerfile with ffmpeg installation
+    - Updated Dockerfile with ffmpeg installation and uploads directory
 docker-compose.yml [x]
 README.md [*]
 ├── Functionality:
@@ -380,6 +443,11 @@ README.md [*]
 │   - Add environment variable requirements
 │   - Add WHISPER_MODEL and WHISPER_DEVICE env vars documentation
 │   - Add voice transcription feature section
+│   - Add file sending feature section
+│   - Document uploads/ folder and Docker volume mounting
+│   - Document UPLOADS_PATH environment variable
+│   - Provide example docker-compose volume mount
+│   - Provide example API request for sending a file
 ├── Input:
 │   - None
 └── Output:
@@ -392,3 +460,11 @@ requirements.txt [*]
 │   - None
 └── Output:
     - Updated requirements.txt with openai-whisper
+.settings [ ]
+    ├── Functionality:
+    │   - Define non-secret environment variables for the project
+    │   - Include UPLOADS_PATH with default value "uploads"
+    ├── Input:
+    │   - None
+    └── Output:
+        - Configuration file with environment variable definitions

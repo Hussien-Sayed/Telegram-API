@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from telegram.error import TelegramError
 
 
@@ -32,6 +33,7 @@ with patch("telegram_api.utils.Bot") as _MockBot:
     _MockBot.return_value = _bot_instance
 
     from api.main import app
+    from api.models import SendFileRequest
 
 
 client = TestClient(app)
@@ -423,3 +425,88 @@ def test_get_chat_ids_voice_message():
     # Find the entry for chat_id 222 (text message)
     text_entry = next(entry for entry in data["chat_ids"] if entry["chat_id"] == 222)
     assert text_entry["text"] == "text_b"
+
+
+# ============================================================================
+# Tests for SendFileRequest model
+# ============================================================================
+
+def test_send_file():
+    """Test SendFileRequest creation with all fields."""
+    request = SendFileRequest(
+        chat_id=123456789,
+        filename="document.pdf",
+        caption="Here is the document",
+        file_type="document",
+        kwargs={"parse_mode": "Markdown"},
+    )
+    assert request.chat_id == 123456789
+    assert request.filename == "document.pdf"
+    assert request.caption == "Here is the document"
+    assert request.file_type == "document"
+    assert request.kwargs == {"parse_mode": "Markdown"}
+
+
+def test_send_file_not_found():
+    """Test SendFileRequest with minimal required fields."""
+    request = SendFileRequest(
+        chat_id=123456789,
+        filename="photo.jpg",
+        file_type="photo",
+    )
+    assert request.chat_id == 123456789
+    assert request.filename == "photo.jpg"
+    assert request.file_type == "photo"
+    assert request.caption is None
+    assert request.kwargs is None
+
+
+def test_send_file_invalid_type():
+    """Test that invalid file_type raises ValidationError."""
+    with pytest.raises(ValidationError) as exc_info:
+        SendFileRequest(
+            chat_id=123456789,
+            filename="file.txt",
+            file_type="invalid_type",
+        )
+    assert "file_type must be one of" in str(exc_info.value)
+
+
+def test_send_file_document():
+    """Test SendFileRequest with document file_type."""
+    request = SendFileRequest(
+        chat_id=123456789,
+        filename="report.pdf",
+        file_type="document",
+    )
+    assert request.file_type == "document"
+
+
+def test_send_file_photo():
+    """Test SendFileRequest with photo file_type."""
+    request = SendFileRequest(
+        chat_id=123456789,
+        filename="image.jpg",
+        file_type="photo",
+    )
+    assert request.file_type == "photo"
+
+
+def test_send_file_video():
+    """Test SendFileRequest with video file_type."""
+    request = SendFileRequest(
+        chat_id=123456789,
+        filename="clip.mp4",
+        file_type="video",
+    )
+    assert request.file_type == "video"
+
+
+def test_send_file_audio():
+    """Test SendFileRequest with audio file_type."""
+    request = SendFileRequest(
+        chat_id=123456789,
+        filename="sound.mp3",
+        file_type="audio",
+    )
+    assert request.file_type == "audio"

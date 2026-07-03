@@ -42,3 +42,7 @@ Thumbs.db
 
 # Agent working files
 .agent_files/
+
+# Uploads folder (keep folder structure, ignore contents except .gitkeep)
+uploads/*
+!uploads/.gitkeep
