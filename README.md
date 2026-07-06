@@ -1,6 +1,6 @@
 # Telegram API Microservice
 
-A FastAPI microservice that wraps the Telegram Bot API, providing HTTP endpoints for sending messages, managing reply keyboards, fetching updates, and sending files. The service automatically transcribes voice messages locally using OpenAI Whisper without requiring an external API key, and is packaged as a Docker image with ffmpeg included for audio processing.
+A FastAPI microservice that wraps the Telegram Bot API, providing HTTP endpoints for sending messages, managing reply keyboards, fetching updates, and sending files. The service supports multiple Telegram bots simultaneously, each identified by a unique bot name in the URL path, with tokens loaded via environment variables. Voice messages are automatically transcribed locally using OpenAI Whisper without requiring an external API key, and the service is packaged as a Docker image with ffmpeg included for audio processing.
 
 ## Getting Started
 
@@ -14,7 +14,7 @@ A FastAPI microservice that wraps the Telegram Bot API, providing HTTP endpoints
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| TELEGRAM_BOT_TOKEN | Yes | — | Your Telegram bot token used to authenticate with the Telegram Bot API |
+| TELEGRAM_BOT_TOKEN_<BOT_NAME> | Yes | — | Set one environment variable per bot using the format `TELEGRAM_BOT_TOKEN_<BOT_NAME>`, where `<BOT_NAME>` is a unique identifier (e.g., `TELEGRAM_BOT_TOKEN_production`, `TELEGRAM_BOT_TOKEN_staging`) |
 | WHISPER_MODEL | No | base | Whisper model size for voice transcription. Options: tiny, base, small, medium, large |
 | WHISPER_DEVICE | No | cpu | Device for Whisper inference. Use `cpu` (default) or `cuda` for GPU acceleration |
 | UPLOADS_PATH | No | uploads | Path to the uploads folder where files to be sent are stored (relative to app root) |
@@ -25,9 +25,12 @@ Files to be sent via the API must be placed in the `uploads/` folder at the proj
 
 ### Basic Run
 
-1. Create a `.env` file with your Telegram bot token:
+1. Create a `.env` file with your Telegram bot token(s):
+
    ```
-   TELEGRAM_BOT_TOKEN=your_bot_token_here
+   TELEGRAM_BOT_TOKEN_production=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
+   TELEGRAM_BOT_TOKEN_staging=987654321:ZYXwvutSRQponMLKjiHGfEDCBA
+   TELEGRAM_BOT_TOKEN_dev=555555555:A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6
    WHISPER_MODEL=base
    WHISPER_DEVICE=cpu
    UPLOADS_PATH=uploads
@@ -53,75 +56,40 @@ Files to be sent via the API must be placed in the `uploads/` folder at the proj
 
 - Access interactive Swagger UI at http://localhost:8000/docs
 - Send health check: `curl http://localhost:8000/`
-- Send messages via POST /api/v1/send_message
-- Send reply keyboards via POST /api/v1/send_reply_keyboard
-- Remove keyboards via POST /api/v1/remove_reply_keyboard
-- Fetch updates (voice messages auto-transcribed) via POST /api/v1/get_updates
-- Get chat IDs via GET /api/v1/get_chat_ids
-- Send files (documents, photos, videos, audio) via POST /api/v1/send_file
+- List configured bots via GET /api/v1/bots
+- Send messages via POST /api/v1/{bot_name}/send_message
+- Send reply keyboards via POST /api/v1/{bot_name}/send_reply_keyboard
+- Remove keyboards via POST /api/v1/{bot_name}/remove_reply_keyboard
+- Fetch updates (voice messages auto-transcribed) via POST /api/v1/{bot_name}/get_updates
+- Get chat IDs via GET /api/v1/{bot_name}/get_chat_ids
+- Send files (documents, photos, videos, audio) via POST /api/v1/{bot_name}/send_file
 
-Example `get_updates` request with voice transcription:
+Replace `{bot_name}` with your configured bot name (e.g., `production`, `staging`, `dev`).
+
+Example API requests:
 ```bash
-curl -X POST http://localhost:8000/api/v1/get_updates \
+# List all registered bots
+curl http://localhost:8000/api/v1/bots
+
+# Send message using production bot
+curl -X POST http://localhost:8000/api/v1/production/send_message \
+  -H "Content-Type: application/json" \
+  -d '{"chat_id": 123456789, "text": "Hello from production bot"}'
+
+# Send message using staging bot
+curl -X POST http://localhost:8000/api/v1/staging/send_message \
+  -H "Content-Type: application/json" \
+  -d '{"chat_id": 123456789, "text": "Hello from staging bot"}'
+
+# Fetch updates with voice transcription
+curl -X POST http://localhost:8000/api/v1/production/get_updates \
   -H "Content-Type: application/json" \
   -d '{"limit": 10}'
-```
 
-Example response showing transcribed voice message in `text`:
-```json
-{
-  "success": true,
-  "updates": [
-    {
-      "update_id": 123,
-      "chat_id": 456789,
-      "text": "this is the transcribed voice message"
-    }
-  ],
-  "error": null
-}
-```
-
-Example send_file requests:
-```bash
-# Send a document
-curl -X POST http://localhost:8000/api/v1/send_file \
+# Send a file
+curl -X POST http://localhost:8000/api/v1/production/send_file \
   -H "Content-Type: application/json" \
-  -d '{
-    "chat_id": 123456789,
-    "filename": "document.pdf",
-    "file_type": "document",
-    "caption": "Here is the document"
-  }'
-
-# Send a photo
-curl -X POST http://localhost:8000/api/v1/send_file \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chat_id": 123456789,
-    "filename": "image.jpg",
-    "file_type": "photo",
-    "caption": "Check out this image"
-  }'
-
-# Send a video
-curl -X POST http://localhost:8000/api/v1/send_file \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chat_id": 123456789,
-    "filename": "video.mp4",
-    "file_type": "video"
-  }'
-
-# Send audio
-curl -X POST http://localhost:8000/api/v1/send_file \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chat_id": 123456789,
-    "filename": "audio.mp3",
-    "file_type": "audio",
-    "caption": "Listen to this"
-  }'
+  -d '{"chat_id": 123456789, "filename": "document.pdf", "file_type": "document", "caption": "Here is the document"}'
 ```
 
 ## Configuration
@@ -135,7 +103,8 @@ When running with Docker, mount the uploads folder to make files available insid
 Using docker run:
 ```bash
 docker run -p 127.0.0.1:8000:8000 \
-  -e TELEGRAM_BOT_TOKEN=your_token \
+  -e TELEGRAM_BOT_TOKEN_production=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ \
+  -e TELEGRAM_BOT_TOKEN_staging=987654321:ZYXwvutSRQponMLKjiHGfEDCBA \
   -v $(pwd)/uploads:/app/uploads \
   telegram-api
 ```

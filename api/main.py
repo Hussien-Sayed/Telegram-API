@@ -5,24 +5,21 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from telegram_api import TelegramClient
+from telegram_api import BotManager
 
 from .router import create_router
 
 
-# Initialize the Telegram client once at import time. The token is validated
-# immediately, so the service fails fast if it is misconfigured.
-_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-if not _BOT_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required.")
-_client = TelegramClient(token=_BOT_TOKEN)
+_bot_manager = BotManager()
+if not _bot_manager.get_bot_names():
+    raise ValueError("No bot tokens configured. Set TELEGRAM_BOT_TOKEN_<BOT_NAME> environment variables.")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Yield control to the app and shut down the client on exit."""
     yield
-    await _client.shutdown()
+    await _bot_manager.shutdown_all()
 
 
 app = FastAPI(
@@ -39,4 +36,4 @@ async def health_check() -> dict:
     return {"status": "ok", "service": "telegram-api"}
 
 
-app.include_router(create_router(_client))
+app.include_router(create_router(_bot_manager))

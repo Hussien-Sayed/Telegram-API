@@ -132,3 +132,9 @@ class ChatIdsResponse(BaseModel):
     success: bool
     chat_ids: List[Dict[str, Any]]
     error: Optional[str] = None
+
+
+class BotsResponse(BaseModel):
+    success: bool
+    bot_names: List[str]
+    error: Optional[str] = None

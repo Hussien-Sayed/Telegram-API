@@ -5,10 +5,11 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, Query
 from telegram.error import TelegramError
 
-from telegram_api import TelegramClient
+from telegram_api import BotManager
 from telegram_api.utils import transcribe_voice
 
 from .models import (
+    BotsResponse,
     ChatIdsResponse,
     GetUpdatesRequest,
     MessageResponse,
@@ -20,12 +21,23 @@ from .models import (
 )
 
 
-def create_router(client: TelegramClient) -> APIRouter:
-    """Create an APIRouter with endpoints backed by the given TelegramClient."""
+def create_router(bot_manager: BotManager) -> APIRouter:
     router = APIRouter(prefix="/api/v1")
 
-    @router.post("/send_message", response_model=MessageResponse)
-    async def send_message(request: SendMessageRequest) -> Dict[str, Any]:
+    @router.get("/bots", response_model=BotsResponse)
+    async def get_bots() -> Dict[str, Any]:
+        return {
+            "success": True,
+            "bot_names": bot_manager.get_bot_names(),
+            "error": None,
+        }
+
+    @router.post("/{bot_name}/send_message", response_model=MessageResponse)
+    async def send_message(bot_name: str, request: SendMessageRequest) -> Dict[str, Any]:
+        try:
+            client = bot_manager.get_client(bot_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         try:
             message = await client.send_message(
                 chat_id=request.chat_id,
@@ -42,10 +54,15 @@ def create_router(client: TelegramClient) -> APIRouter:
         except TelegramError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    @router.post("/send_reply_keyboard", response_model=MessageResponse)
+    @router.post("/{bot_name}/send_reply_keyboard", response_model=MessageResponse)
     async def send_reply_keyboard(
+        bot_name: str,
         request: SendReplyKeyboardRequest,
     ) -> Dict[str, Any]:
+        try:
+            client = bot_manager.get_client(bot_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         try:
             message = await client.send_reply_keyboard(
                 chat_id=request.chat_id,
@@ -65,10 +82,15 @@ def create_router(client: TelegramClient) -> APIRouter:
         except TelegramError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    @router.post("/remove_reply_keyboard", response_model=MessageResponse)
+    @router.post("/{bot_name}/remove_reply_keyboard", response_model=MessageResponse)
     async def remove_reply_keyboard(
+        bot_name: str,
         request: RemoveReplyKeyboardRequest,
     ) -> Dict[str, Any]:
+        try:
+            client = bot_manager.get_client(bot_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         try:
             message = await client.remove_reply_keyboard(
                 chat_id=request.chat_id,
@@ -85,8 +107,12 @@ def create_router(client: TelegramClient) -> APIRouter:
         except TelegramError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    @router.post("/send_file", response_model=MessageResponse)
-    async def send_file(request: SendFileRequest) -> Dict[str, Any]:
+    @router.post("/{bot_name}/send_file", response_model=MessageResponse)
+    async def send_file(bot_name: str, request: SendFileRequest) -> Dict[str, Any]:
+        try:
+            client = bot_manager.get_client(bot_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         try:
             message = await client.send_file(
                 chat_id=request.chat_id,
@@ -105,8 +131,12 @@ def create_router(client: TelegramClient) -> APIRouter:
         except TelegramError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    @router.post("/get_updates", response_model=UpdatesResponse)
-    async def get_updates(request: GetUpdatesRequest) -> Dict[str, Any]:
+    @router.post("/{bot_name}/get_updates", response_model=UpdatesResponse)
+    async def get_updates(bot_name: str, request: GetUpdatesRequest) -> Dict[str, Any]:
+        try:
+            client = bot_manager.get_client(bot_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         try:
             updates = await client.get_updates(
                 chat_id=request.chat_id,
@@ -140,10 +170,15 @@ def create_router(client: TelegramClient) -> APIRouter:
         except TelegramError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    @router.get("/get_chat_ids", response_model=ChatIdsResponse)
+    @router.get("/{bot_name}/get_chat_ids", response_model=ChatIdsResponse)
     async def get_chat_ids(
+        bot_name: str,
         limit: int = Query(10, ge=1, le=100),
     ) -> Dict[str, Any]:
+        try:
+            client = bot_manager.get_client(bot_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         try:
             updates = await client.get_updates(limit=limit)
             seen: set = set()

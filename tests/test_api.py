@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from telegram.error import TelegramError
 
 
-os.environ["TELEGRAM_BOT_TOKEN"] = "fake-token-for-tests"
+os.environ["TELEGRAM_BOT_TOKEN_TEST"] = "fake-token-for-tests"
 
 # Stub out the 'whisper' module before any project imports so tests run
 # without openai-whisper installed locally (it lives in the Docker image).
@@ -56,7 +56,7 @@ def test_health_check():
 
 def test_send_message():
     response = client.post(
-        "/api/v1/send_message",
+        "/api/v1/test/send_message",
         json={"chat_id": 123456789, "text": "Hello!"},
     )
     assert response.status_code == 200
@@ -68,7 +68,7 @@ def test_send_message():
 
 def test_send_message_empty_text():
     response = client.post(
-        "/api/v1/send_message",
+        "/api/v1/test/send_message",
         json={"chat_id": 123456789, "text": ""},
     )
     assert response.status_code == 400
@@ -77,7 +77,7 @@ def test_send_message_empty_text():
 
 def test_send_reply_keyboard():
     response = client.post(
-        "/api/v1/send_reply_keyboard",
+        "/api/v1/test/send_reply_keyboard",
         json={
             "chat_id": 123456789,
             "text": "Pick an option",
@@ -92,7 +92,7 @@ def test_send_reply_keyboard():
 
 def test_send_reply_keyboard_empty_keyboard():
     response = client.post(
-        "/api/v1/send_reply_keyboard",
+        "/api/v1/test/send_reply_keyboard",
         json={"chat_id": 123456789, "text": "Pick", "keyboard": []},
     )
     assert response.status_code == 400
@@ -100,7 +100,7 @@ def test_send_reply_keyboard_empty_keyboard():
 
 def test_remove_reply_keyboard():
     response = client.post(
-        "/api/v1/remove_reply_keyboard",
+        "/api/v1/test/remove_reply_keyboard",
         json={"chat_id": 123456789},
     )
     assert response.status_code == 200
@@ -117,7 +117,7 @@ def test_get_updates():
     with patch("telegram_api.utils.TelegramClient.get_updates") as mock_get:
         mock_get.return_value = updates
         response = client.post(
-            "/api/v1/get_updates",
+            "/api/v1/test/get_updates",
             json={"chat_id": 123456789, "limit": 10},
         )
     assert response.status_code == 200
@@ -139,7 +139,7 @@ def test_get_chat_ids():
     ]
     with patch("telegram_api.utils.TelegramClient.get_updates") as mock_get:
         mock_get.return_value = updates
-        response = client.get("/api/v1/get_chat_ids?limit=10")
+        response = client.get("/api/v1/test/get_chat_ids?limit=10")
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
@@ -152,11 +152,47 @@ def test_error_handling():
     with patch("telegram_api.utils.TelegramClient.send_message") as mock_send:
         mock_send.side_effect = TelegramError("Telegram API failure")
         response = client.post(
-            "/api/v1/send_message",
+            "/api/v1/test/send_message",
             json={"chat_id": 123456789, "text": "Hello!"},
         )
     assert response.status_code == 500
     assert "Telegram API failure" in response.json()["detail"]
+
+
+def test_get_bots():
+    """Test GET /api/v1/bots returns the list of configured bots."""
+    response = client.get("/api/v1/bots")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["bot_names"] == ["test"]
+    assert data["error"] is None
+
+
+def test_invalid_bot_name():
+    """Test that an unknown bot name returns HTTP 404."""
+    response = client.post(
+        "/api/v1/unknown_bot/send_message",
+        json={"chat_id": 123456789, "text": "Hello!"},
+    )
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_multiple_bots():
+    """Test BotManager with multiple bot tokens configured."""
+    from telegram_api import BotManager
+
+    # Configure exactly two bot tokens, clearing other env vars so only these two are loaded.
+    env_vars = {
+        "TELEGRAM_BOT_TOKEN_BOT1": "token1",
+        "TELEGRAM_BOT_TOKEN_BOT2": "token2",
+    }
+
+    with patch.dict(os.environ, env_vars, clear=True):
+        bot_manager = BotManager()
+        bot_names = bot_manager.get_bot_names()
+        assert sorted(bot_names) == ["bot1", "bot2"]
 
 
 # ============================================================================
@@ -355,7 +391,7 @@ def test_get_updates_voice_message():
         mock_transcribe.return_value = "hello world"
 
         response = client.post(
-            "/api/v1/get_updates",
+            "/api/v1/test/get_updates",
             json={"chat_id": 123456789, "limit": 10},
         )
 
@@ -375,7 +411,7 @@ def test_get_updates_voice_transcription_failure():
         mock_transcribe.return_value = "transcription failed"
 
         response = client.post(
-            "/api/v1/get_updates",
+            "/api/v1/test/get_updates",
             json={"chat_id": 123456789, "limit": 10},
         )
 
@@ -392,7 +428,7 @@ def test_get_updates_text_message_unchanged():
         mock_get.return_value = [text_update]
 
         response = client.post(
-            "/api/v1/get_updates",
+            "/api/v1/test/get_updates",
             json={"chat_id": 123456789, "limit": 10},
         )
 
@@ -411,7 +447,7 @@ def test_get_chat_ids_voice_message():
         mock_get.return_value = [voice_update, text_update]
         mock_transcribe.return_value = "voice transcript"
 
-        response = client.get("/api/v1/get_chat_ids?limit=10")
+        response = client.get("/api/v1/test/get_chat_ids?limit=10")
 
     assert response.status_code == 200
     data = response.json()
@@ -469,7 +505,7 @@ def test_send_file_invalid_type():
             filename="file.txt",
             file_type="invalid_type",
         )
-    assert "file_type must be one of" in str(exc_info.value)
+    assert "Input should be 'document', 'photo', 'video' or 'audio'" in str(exc_info.value)
 
 
 def test_send_file_document():
