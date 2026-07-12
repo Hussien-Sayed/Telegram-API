@@ -7,7 +7,10 @@ ARG WHISPER_MODEL=base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # Use /app/.cache as the cache root for all processes (build-time root and runtime appuser).
+    # This avoids any permission issues with /root, and appuser already owns /app.
+    XDG_CACHE_HOME=/app/.cache
 
 WORKDIR /app
 
@@ -27,16 +30,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the Whisper model at build time so it is baked into the image.
 # This eliminates the runtime download on first voice message.
+# ARG must be re-declared here so its value is visible to this RUN layer.
+ARG WHISPER_MODEL=base
 RUN python -c "import whisper; whisper.load_model('${WHISPER_MODEL}')"
 
 # Copy the application code.
 COPY . .
 
 # Run as a non-root user for security.
+# /app/.cache/whisper is already under /app, so the chown -R /app covers it.
 RUN useradd -m appuser \
     && chown -R appuser:appuser /app \
-    && chmod -R 755 /app/uploads \
-    && chown -R appuser:appuser /root/.cache/whisper
+    && chmod -R 755 /app/uploads
 USER appuser
 
 EXPOSE 8000
