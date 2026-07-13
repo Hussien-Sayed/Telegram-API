@@ -78,6 +78,55 @@ def test_send_message_empty_text():
     assert "text" in response.json()["detail"].lower()
 
 
+def test_send_message_uses_markdown_v2_by_default():
+    """Messages are sent with parse_mode=MarkdownV2 and converted."""
+    _bot_instance.send_message.reset_mock()
+    response = client.post(
+        "/api/v1/test/send_message",
+        json={"chat_id": 123456789, "text": "**bold** _italic_"},
+    )
+    assert response.status_code == 200
+    _bot_instance.send_message.assert_awaited_once()
+    call_kwargs = _bot_instance.send_message.call_args.kwargs
+    assert call_kwargs["chat_id"] == 123456789
+    assert call_kwargs["text"] == "*bold* _italic_"
+    assert call_kwargs["parse_mode"] == "MarkdownV2"
+
+
+def test_send_message_allows_parse_mode_override():
+    """Callers can override the default MarkdownV2 parse_mode via kwargs."""
+    _bot_instance.send_message.reset_mock()
+    response = client.post(
+        "/api/v1/test/send_message",
+        json={
+            "chat_id": 123456789,
+            "text": "<b>bold</b>",
+            "kwargs": {"parse_mode": "HTML"},
+        },
+    )
+    assert response.status_code == 200
+    call_kwargs = _bot_instance.send_message.call_args.kwargs
+    assert call_kwargs["parse_mode"] == "HTML"
+    assert call_kwargs["text"] == "<b>bold</b>"
+
+
+def test_send_message_skips_conversion_when_parse_mode_none():
+    """If parse_mode is explicitly None, the original text is sent unchanged."""
+    _bot_instance.send_message.reset_mock()
+    response = client.post(
+        "/api/v1/test/send_message",
+        json={
+            "chat_id": 123456789,
+            "text": "**bold** _italic_",
+            "kwargs": {"parse_mode": None},
+        },
+    )
+    assert response.status_code == 200
+    call_kwargs = _bot_instance.send_message.call_args.kwargs
+    assert call_kwargs["parse_mode"] is None
+    assert call_kwargs["text"] == "**bold** _italic_"
+
+
 def test_edit_message():
     response = client.post(
         "/api/v1/test/edit_message",
@@ -97,6 +146,20 @@ def test_edit_message_empty_text():
     )
     assert response.status_code == 400
     assert "text" in response.json()["detail"].lower()
+
+
+def test_edit_message_uses_markdown_v2_by_default():
+    """Edited messages are converted to Telegram MarkdownV2 by default."""
+    _bot_instance.edit_message_text.reset_mock()
+    response = client.post(
+        "/api/v1/test/edit_message",
+        json={"chat_id": 123456789, "message_id": 123, "text": "**bold**"},
+    )
+    assert response.status_code == 200
+    _bot_instance.edit_message_text.assert_awaited_once()
+    call_kwargs = _bot_instance.edit_message_text.call_args.kwargs
+    assert call_kwargs["parse_mode"] == "MarkdownV2"
+    assert call_kwargs["text"] == "*bold*"
 
 
 def test_edit_message_invalid_bot():

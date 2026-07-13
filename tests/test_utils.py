@@ -139,3 +139,84 @@ def test_transcribe_voice_returns_failure_on_exception():
             return result
 
     assert asyncio.run(_run()) == "transcription failed"
+
+
+# ============================================================================
+# Tests for markdown conversion
+# ============================================================================
+
+def _make_client(utils: object) -> object:
+    """Create a TelegramClient with a mocked bot for unit tests."""
+    client = utils.TelegramClient(token="fake-token")
+    client.bot = AsyncMock()
+    return client
+
+
+def test_convert_markdown_success():
+    """_convert_markdown turns standard Markdown into Telegram MarkdownV2."""
+    utils = _reload_utils(_get_whisper_stub())
+    result = utils._convert_markdown("**bold** _italic_")
+    assert result == "*bold* _italic_"
+
+
+def test_convert_markdown_returns_original_on_failure():
+    """_convert_markdown falls back to the original text on any error."""
+    utils = _reload_utils(_get_whisper_stub())
+    with patch.object(utils, "md_convert", side_effect=Exception("boom")):
+        result = utils._convert_markdown("**bold**")
+    assert result == "**bold**"
+
+
+def test_send_message_converts_markdown_by_default():
+    """send_message converts standard Markdown when using default parse_mode."""
+    utils = _reload_utils(_get_whisper_stub())
+    client = _make_client(utils)
+
+    asyncio.run(client.send_message(chat_id=1, text="**bold** _italic_"))
+
+    call_kwargs = client.bot.send_message.call_args.kwargs
+    assert call_kwargs["text"] == "*bold* _italic_"
+    assert call_kwargs["parse_mode"] == "MarkdownV2"
+
+
+def test_send_message_skips_conversion_when_parse_mode_overridden():
+    """send_message leaves the text untouched when parse_mode is overridden."""
+    utils = _reload_utils(_get_whisper_stub())
+    client = _make_client(utils)
+
+    asyncio.run(client.send_message(chat_id=1, text="**bold**", parse_mode=None))
+
+    call_kwargs = client.bot.send_message.call_args.kwargs
+    assert call_kwargs["text"] == "**bold**"
+    assert call_kwargs["parse_mode"] is None
+
+
+def test_edit_message_converts_markdown_by_default():
+    """edit_message converts standard Markdown when using default parse_mode."""
+    utils = _reload_utils(_get_whisper_stub())
+    client = _make_client(utils)
+
+    asyncio.run(client.edit_message(chat_id=1, message_id=2, text="**bold**"))
+
+    call_kwargs = client.bot.edit_message_text.call_args.kwargs
+    assert call_kwargs["text"] == "*bold*"
+    assert call_kwargs["parse_mode"] == "MarkdownV2"
+
+
+def test_send_file_converts_caption_by_default():
+    """send_file converts standard Markdown captions when using default parse_mode."""
+    utils = _reload_utils(_get_whisper_stub())
+    client = _make_client(utils)
+
+    asyncio.run(
+        client.send_file(
+            chat_id=1,
+            filename="test.txt",
+            file_type="document",
+            caption="**bold** _italic_",
+        )
+    )
+
+    call_kwargs = client.bot.send_document.call_args.kwargs
+    assert call_kwargs["caption"] == "*bold* _italic_"
+    assert call_kwargs["parse_mode"] == "MarkdownV2"

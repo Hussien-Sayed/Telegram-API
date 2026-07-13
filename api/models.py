@@ -10,8 +10,8 @@ class SendMessageRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "chat_id": 123456789,
-                "text": "Hello from the bot!",
-                "kwargs": {"parse_mode": "Markdown"},
+                "text": "**Hello** from the bot!",
+                "kwargs": {"parse_mode": "MarkdownV2"},
             }
         }
     )
@@ -120,8 +120,8 @@ class EditMessageRequest(BaseModel):
             "example": {
                 "chat_id": 123456789,
                 "message_id": 123,
-                "text": "Updated message text",
-                "kwargs": {"parse_mode": "Markdown"},
+                "text": "**Updated** message text",
+                "kwargs": {"parse_mode": "MarkdownV2"},
             }
         }
     )

@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from telegram import (
     Bot,
@@ -13,6 +13,8 @@ from telegram import (
     Update,
 )
 from telegram.error import TelegramError
+from telegramify_markdown import convert as md_convert
+from telegramify_markdown import entities_to_markdownv2
 
 import whisper
 
@@ -40,12 +42,28 @@ async def transcribe_voice(voice: Any, bot: Any) -> str:
             os.remove(tmp_path)
 
 
+def _convert_markdown(text: str) -> str:
+    """Convert standard Markdown to Telegram-safe MarkdownV2.
+
+    If the conversion fails for any reason, the original text is returned
+    unchanged so the caller can still attempt to send it.
+    """
+    try:
+        plain_text, entities = md_convert(text)
+        return entities_to_markdownv2(plain_text, entities)
+    except Exception as exc:
+        logger.warning("Markdown conversion failed: %s. Sending original text.", exc)
+        return text
+
+
 class TelegramClient:
     """Thin wrapper around python-telegram-bot's Bot class.
 
     The bot token is read from the ``TELEGRAM_BOT_TOKEN`` environment variable
     unless it is provided explicitly.
     """
+
+    DEFAULT_PARSE_MODE: str = "MarkdownV2"
 
     def __init__(
         self, token: Optional[str] = None, offset_path: Optional[str] = None
@@ -60,20 +78,30 @@ class TelegramClient:
         self.offset_path = offset_path
         self._last_update_id: int = self._load_offset() if offset_path else 0
 
+    def _prepare_kwargs(self, **kwargs: Any) -> Dict[str, Any]:
+        """Apply the default ``parse_mode`` unless the caller overrides it."""
+        return {"parse_mode": self.DEFAULT_PARSE_MODE, **kwargs}
+
     async def send_message(
         self, chat_id: int, text: str, **kwargs: Any
     ) -> Any:
         """Send ``text`` to ``chat_id``.
 
         All extra keyword arguments are forwarded to ``Bot.send_message``.
+        Messages are parsed as Markdown by default; pass ``parse_mode`` to
+        override (e.g. ``parse_mode="HTML"`` or ``parse_mode=None``).
         """
         if not text:
             raise ValueError("Message text cannot be empty.")
 
+        send_kwargs = self._prepare_kwargs(**kwargs)
+        if send_kwargs.get("parse_mode") == self.DEFAULT_PARSE_MODE:
+            text = _convert_markdown(text)
+
         logger.info("Sending message to chat %s", chat_id)
         try:
             return await self.bot.send_message(
-                chat_id=chat_id, text=text, **kwargs
+                chat_id=chat_id, text=text, **send_kwargs
             )
         except TelegramError as exc:
             logger.error("Failed to send message to chat %s: %s", chat_id, exc)
@@ -164,6 +192,10 @@ class TelegramClient:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
+        send_kwargs = self._prepare_kwargs(**kwargs)
+        if caption is not None and send_kwargs.get("parse_mode") == self.DEFAULT_PARSE_MODE:
+            caption = _convert_markdown(caption)
+
         logger.info(
             "Sending %s to chat %s: %s (caption: %s)",
             file_type,
@@ -180,19 +212,31 @@ class TelegramClient:
                 # Use appropriate method based on file_type
                 if file_type == "document":
                     return await self.bot.send_document(
-                        chat_id=chat_id, document=input_file, caption=caption, **kwargs
+                        chat_id=chat_id,
+                        document=input_file,
+                        caption=caption,
+                        **send_kwargs,
                     )
                 elif file_type == "photo":
                     return await self.bot.send_photo(
-                        chat_id=chat_id, photo=input_file, caption=caption, **kwargs
+                        chat_id=chat_id,
+                        photo=input_file,
+                        caption=caption,
+                        **send_kwargs,
                     )
                 elif file_type == "video":
                     return await self.bot.send_video(
-                        chat_id=chat_id, video=input_file, caption=caption, **kwargs
+                        chat_id=chat_id,
+                        video=input_file,
+                        caption=caption,
+                        **send_kwargs,
                     )
                 elif file_type == "audio":
                     return await self.bot.send_audio(
-                        chat_id=chat_id, audio=input_file, caption=caption, **kwargs
+                        chat_id=chat_id,
+                        audio=input_file,
+                        caption=caption,
+                        **send_kwargs,
                     )
         except TelegramError as exc:
             logger.error(
@@ -210,10 +254,17 @@ class TelegramClient:
         if not text:
             raise ValueError("Message text cannot be empty.")
 
+        edit_kwargs = self._prepare_kwargs(**kwargs)
+        if edit_kwargs.get("parse_mode") == self.DEFAULT_PARSE_MODE:
+            text = _convert_markdown(text)
+
         logger.info("Editing message %s in chat %s", message_id, chat_id)
         try:
             return await self.bot.edit_message_text(
-                chat_id=chat_id, message_id=message_id, text=text, **kwargs
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                **edit_kwargs,
             )
         except TelegramError as exc:
             logger.error(
