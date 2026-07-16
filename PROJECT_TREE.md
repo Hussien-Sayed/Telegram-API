@@ -109,17 +109,37 @@ api/
 │   │   │   - Pydantic model for get_updates responses
 │   │   ├── Input:
 │   │   │   - success: bool
-│   │   │   - updates: List[Dict[str, Any]]
+│   │   │   - updates: List[UpdateEntry]
 │   │   │   - error: Optional[str] = None
 │   │   └── Output:
 │   │       - Validated Pydantic model instance
-│   └── class ChatIdsResponse [x]
+│   ├── class ChatIdsResponse [x]
+│   │   ├── Functionality:
+│   │   │   - Pydantic model for get_chat_ids responses
+│   │   ├── Input:
+│   │   │   - success: bool
+│   │   │   - chat_ids: List[ChatIdEntry]
+│   │   │   - error: Optional[str] = None
+│   │   └── Output:
+│   │       - Validated Pydantic model instance
+│   ├── class UpdateEntry [x]
+│   │   ├── Functionality:
+│   │   │   - Typed inner model for a single update
+│   │   ├── Input:
+│   │   │   - update_id: int
+│   │   │   - chat_id: Optional[int] = None
+│   │   │   - message_type: Optional[Literal["voice", "text"]] = None
+│   │   │   - text: Optional[str] = None
+│   │   │   - reply_to_message_id: Optional[int] = None
+│   │   └── Output:
+│   │       - Validated Pydantic model instance
+│   └── class ChatIdEntry [x]
 │       ├── Functionality:
-│       │   - Pydantic model for get_chat_ids responses
+│       │   - Typed inner model for a single chat ID entry
 │       ├── Input:
-│       │   - success: bool
-│       │   - chat_ids: List[Dict[str, Any]]
-│       │   - error: Optional[str] = None
+│       │   - chat_id: int
+│       │   - message_type: Optional[Literal["voice", "text"]] = None
+│       │   - text: Optional[str] = None
 │       └── Output:
 │           - Validated Pydantic model instance
 ├── router.py [x]
@@ -157,6 +177,8 @@ api/
 │   │   │   - Get updates endpoint
 │   │   │   - Detect update.message.voice; if present, await transcribe_voice(voice, client.bot)
 │   │   │   - Fall back to update.message.text for text messages
+│   │   │   - Include message_type ("voice" | "text" | None) in each returned update
+│   │   │   - Include reply_to_message_id when the message is a reply
 │   │   │   - Text is None if neither voice nor text
 │   │   ├── Input:
 │   │   │   - request: GetUpdatesRequest
@@ -167,6 +189,7 @@ api/
 │       │   - Get chat IDs endpoint
 │       │   - Detect update.message.voice; if present, await transcribe_voice(voice, client.bot)
 │       │   - Fall back to update.message.text for text messages
+│       │   - Include message_type ("voice" | "text" | None) in each returned chat entry
 │       │   - Text is None if neither voice nor text
 │       ├── Input:
 │       │   - limit: int

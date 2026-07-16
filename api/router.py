@@ -184,10 +184,18 @@ def create_router(bot_manager: BotManager) -> APIRouter:
             for update in updates:
                 if update.message and update.message.voice:
                     text = await transcribe_voice(update.message.voice, client.bot)
+                    message_type = "voice"
                 elif update.message and update.message.text:
                     text = update.message.text
+                    message_type = "text"
                 else:
                     text = None
+                    message_type = None
+                reply_to_message_id = (
+                    update.message.reply_to_message.message_id
+                    if update.message and update.message.reply_to_message
+                    else None
+                )
                 updates_list.append({
                     "update_id": update.update_id,
                     "chat_id": (
@@ -195,7 +203,9 @@ def create_router(bot_manager: BotManager) -> APIRouter:
                         if update.effective_chat
                         else None
                     ),
+                    "message_type": message_type,
                     "text": text,
+                    "reply_to_message_id": reply_to_message_id,
                 })
             return {
                 "success": True,
@@ -226,13 +236,20 @@ def create_router(bot_manager: BotManager) -> APIRouter:
                 )
                 if update.message and update.message.voice:
                     text = await transcribe_voice(update.message.voice, client.bot)
+                    message_type = "voice"
                 elif update.message and update.message.text:
                     text = update.message.text
+                    message_type = "text"
                 else:
                     text = None
+                    message_type = None
                 if chat_id is not None and chat_id not in seen:
                     seen.add(chat_id)
-                    chat_ids.append({"chat_id": chat_id, "text": text})
+                    chat_ids.append({
+                        "chat_id": chat_id,
+                        "message_type": message_type,
+                        "text": text,
+                    })
             return {
                 "success": True,
                 "chat_ids": chat_ids,

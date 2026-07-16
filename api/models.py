@@ -132,6 +132,24 @@ class EditMessageRequest(BaseModel):
     kwargs: Optional[Dict[str, Any]] = None
 
 
+class UpdateEntry(BaseModel):
+    """Single update entry returned by the get_updates endpoint."""
+
+    update_id: int
+    chat_id: Optional[int] = None
+    message_type: Optional[Literal["voice", "text"]] = None
+    text: Optional[str] = None
+    reply_to_message_id: Optional[int] = None
+
+
+class ChatIdEntry(BaseModel):
+    """Single chat ID entry returned by the get_chat_ids endpoint."""
+
+    chat_id: int
+    message_type: Optional[Literal["voice", "text"]] = None
+    text: Optional[str] = None
+
+
 class MessageResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
@@ -163,13 +181,13 @@ class MessageResponse(BaseModel):
 
 class UpdatesResponse(BaseModel):
     success: bool
-    updates: List[Dict[str, Any]]
+    updates: List[UpdateEntry]
     error: Optional[str] = None
 
 
 class ChatIdsResponse(BaseModel):
     success: bool
-    chat_ids: List[Dict[str, Any]]
+    chat_ids: List[ChatIdEntry]
     error: Optional[str] = None
 
 

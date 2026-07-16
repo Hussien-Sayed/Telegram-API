@@ -42,12 +42,17 @@ with patch("telegram_api.utils.Bot") as _MockBot:
 client = TestClient(app)
 
 
-def _fake_update(update_id: int, chat_id: int, text: str = "Hi"):
+def _fake_update(update_id: int, chat_id: int, text: str = "Hi", reply_to_message_id: int = None):
     update = AsyncMock()
     update.update_id = update_id
     update.effective_chat = AsyncMock(id=chat_id)
     update.message = AsyncMock(text=text)
     update.message.voice = None  # explicitly not a voice message
+    if reply_to_message_id is not None:
+        update.message.reply_to_message = AsyncMock()
+        update.message.reply_to_message.message_id = reply_to_message_id
+    else:
+        update.message.reply_to_message = None
     return update
 
 
@@ -296,6 +301,8 @@ def test_get_updates():
     # Verify updates from multiple chat IDs are returned
     chat_ids = {update["chat_id"] for update in data["updates"]}
     assert chat_ids == {123456789, 99999}
+    # Text messages should be marked as type "text"
+    assert all(update["message_type"] == "text" for update in data["updates"])
     mock_get.assert_awaited_once_with(limit=10, timeout=0)
 
 
@@ -313,6 +320,8 @@ def test_get_chat_ids():
     assert data["success"] is True
     chat_ids = [entry["chat_id"] for entry in data["chat_ids"]]
     assert chat_ids == [123456789, 99999]
+    # All entries came from text messages
+    assert all(entry["message_type"] == "text" for entry in data["chat_ids"])
     mock_get.assert_awaited_once_with(limit=10)
 
 
@@ -544,6 +553,7 @@ def _fake_voice_update(update_id: int, chat_id: int, file_id: str = "voice_file_
     update.message.text = None
     update.message.voice = AsyncMock()
     update.message.voice.file_id = file_id
+    update.message.reply_to_message = None
     return update
 
 
@@ -565,6 +575,7 @@ def test_get_updates_voice_message():
     assert data["success"] is True
     assert data["updates"][0]["text"] == "hello world"
     assert data["updates"][0]["chat_id"] == 123456789
+    assert data["updates"][0]["message_type"] == "voice"
 
 
 def test_get_updates_voice_transcription_failure():
@@ -583,6 +594,7 @@ def test_get_updates_voice_transcription_failure():
     assert response.status_code == 200
     data = response.json()
     assert data["updates"][0]["text"] == "transcription failed"
+    assert data["updates"][0]["message_type"] == "voice"
 
 
 def test_get_updates_text_message_unchanged():
@@ -600,7 +612,30 @@ def test_get_updates_text_message_unchanged():
         assert response.status_code == 200
         data = response.json()
         assert data["updates"][0]["text"] == "plain text message"
+        assert data["updates"][0]["message_type"] == "text"
+        assert data["updates"][0]["reply_to_message_id"] is None
         mock_transcribe.assert_not_called()
+
+
+def test_get_updates_reply_to_message():
+    """Test that reply_to_message_id is exposed for reply messages."""
+    reply_update = _fake_update(4, 123456789, "reply text", reply_to_message_id=7)
+    with patch("telegram_api.utils.TelegramClient.get_updates") as mock_get, \
+         patch("api.router.transcribe_voice", new_callable=AsyncMock) as mock_transcribe:
+        mock_get.return_value = [reply_update]
+
+        response = client.post(
+            "/api/v1/test/get_updates",
+            json={"chat_id": 123456789, "limit": 10},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["updates"][0]["text"] == "reply text"
+    assert data["updates"][0]["message_type"] == "text"
+    assert data["updates"][0]["reply_to_message_id"] == 7
+    mock_transcribe.assert_not_called()
 
 
 def test_get_chat_ids_voice_message():
@@ -622,10 +657,12 @@ def test_get_chat_ids_voice_message():
     # Find the entry for chat_id 111 (voice message)
     voice_entry = next(entry for entry in data["chat_ids"] if entry["chat_id"] == 111)
     assert voice_entry["text"] == "voice transcript"
+    assert voice_entry["message_type"] == "voice"
 
     # Find the entry for chat_id 222 (text message)
     text_entry = next(entry for entry in data["chat_ids"] if entry["chat_id"] == 222)
     assert text_entry["text"] == "text_b"
+    assert text_entry["message_type"] == "text"
 
 
 # ============================================================================
