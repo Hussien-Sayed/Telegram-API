@@ -29,6 +29,10 @@ _whisper_model_name = os.getenv("WHISPER_MODEL", "base")
 logger.info("Loading Whisper model '%s' on cpu", _whisper_model_name)
 _whisper_model = whisper.load_model(_whisper_model_name, device="cpu")
 
+# Timeouts for large file transfers to/from Telegram (in seconds).
+TELEGRAM_DOWNLOAD_TIMEOUT = float(os.getenv("TELEGRAM_DOWNLOAD_TIMEOUT", "300.0"))
+TELEGRAM_UPLOAD_TIMEOUT = float(os.getenv("TELEGRAM_UPLOAD_TIMEOUT", "300.0"))
+
 
 def _split_text_safely(text: str, limit: int = 4096) -> List[str]:
     if len(text) <= limit:
@@ -70,7 +74,9 @@ async def transcribe_voice(voice: Any, bot: Any) -> str:
     tmp_path = f"/tmp/voice_{voice.file_id}.ogg"
     try:
         tg_file = await bot.get_file(voice.file_id)
-        await tg_file.download_to_drive(tmp_path)
+        await tg_file.download_to_drive(
+            tmp_path, read_timeout=TELEGRAM_DOWNLOAD_TIMEOUT
+        )
         result = _whisper_model.transcribe(str(tmp_path))
         return result["text"].strip()
     except Exception as exc:
@@ -278,6 +284,7 @@ class TelegramClient:
             raise ValueError(error_msg)
 
         send_kwargs = self._prepare_kwargs(**kwargs)
+        write_timeout = send_kwargs.pop("write_timeout", TELEGRAM_UPLOAD_TIMEOUT)
         if caption is not None and send_kwargs.get("parse_mode") == self.DEFAULT_PARSE_MODE:
             caption = _convert_markdown(caption)
 
@@ -300,6 +307,7 @@ class TelegramClient:
                         chat_id=chat_id,
                         document=input_file,
                         caption=caption,
+                        write_timeout=write_timeout,
                         **send_kwargs,
                     )
                 elif file_type == "photo":
@@ -307,6 +315,7 @@ class TelegramClient:
                         chat_id=chat_id,
                         photo=input_file,
                         caption=caption,
+                        write_timeout=write_timeout,
                         **send_kwargs,
                     )
                 elif file_type == "video":
@@ -314,6 +323,7 @@ class TelegramClient:
                         chat_id=chat_id,
                         video=input_file,
                         caption=caption,
+                        write_timeout=write_timeout,
                         **send_kwargs,
                     )
                 elif file_type == "audio":
@@ -321,6 +331,7 @@ class TelegramClient:
                         chat_id=chat_id,
                         audio=input_file,
                         caption=caption,
+                        write_timeout=write_timeout,
                         **send_kwargs,
                     )
         except TelegramError as exc:

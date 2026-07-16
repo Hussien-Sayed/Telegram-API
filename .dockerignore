@@ -4,3 +4,7 @@ __pycache__/
 .agent_files/
 *.md
 .telegram_offset
+.env
+.env.*
+!.env.example
+uploads/
