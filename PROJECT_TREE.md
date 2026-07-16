@@ -404,7 +404,7 @@ tests/
     ├── function test_transcribe_voice_singleton() [ ]
     ├── function test_transcribe_voice_cpu_device() [ ]
     └── function test_transcribe_voice_model_from_env() [ ]
-.dockerignore [*]
+.dockerignore [x]
 ├── Functionality:
 │   - Optionally exclude uploads folder contents from Docker image
 ├── Input:

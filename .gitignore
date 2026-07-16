@@ -20,6 +20,7 @@ ENV/
 .env
 .env.*
 *.env
+!.env.example
 
 # pytest artifacts
 .pytest_cache/

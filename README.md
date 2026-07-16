@@ -18,6 +18,8 @@ A FastAPI microservice that wraps the Telegram Bot API, providing HTTP endpoints
 | WHISPER_MODEL | No | base | Whisper model size for voice transcription. Options: tiny, base, small, medium, large |
 | WHISPER_DEVICE | No | cpu | Device for Whisper inference. Use `cpu` (default) or `cuda` for GPU acceleration |
 | UPLOADS_PATH | No | uploads | Path to the uploads folder where files to be sent are stored (relative to app root) |
+| TELEGRAM_DOWNLOAD_TIMEOUT | No | 300.0 | `read_timeout` in seconds for downloading Telegram files (e.g. voice messages) |
+| TELEGRAM_UPLOAD_TIMEOUT | No | 300.0 | `write_timeout` in seconds for uploading files to Telegram via the send-file methods |
 
 ### Required Data
 
@@ -34,6 +36,8 @@ Files to be sent via the API must be placed in the `uploads/` folder at the proj
    WHISPER_MODEL=base
    WHISPER_DEVICE=cpu
    UPLOADS_PATH=uploads
+   TELEGRAM_DOWNLOAD_TIMEOUT=300.0
+   TELEGRAM_UPLOAD_TIMEOUT=300.0
    ```
 
 2. Run with Docker (recommended):
