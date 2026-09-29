@@ -116,6 +116,27 @@ def _split_markdownv2_safely(text: str, limit: int = TELEGRAM_MESSAGE_LIMIT) -> 
         return _split_text_safely(text, limit)
 
 
+def resolve_shared_path(dest_rel: str, root: str) -> str:
+    """Resolve a relative destination under ``root`` and block traversal.
+
+    ``dest_rel`` must be a relative path using ``/`` as the separator and must
+    not contain any ``..`` components. The returned path is the absolute,
+    normalized destination under ``root``.
+    """
+    if not dest_rel:
+        raise ValueError("dest_path is required")
+    if os.path.isabs(dest_rel):
+        raise ValueError("dest_path must be relative, not absolute")
+    if any(part == ".." for part in dest_rel.split("/")):
+        raise ValueError("dest_path must not contain '..'")
+
+    abs_root = os.path.abspath(root)
+    abs_dest = os.path.abspath(os.path.join(abs_root, dest_rel))
+    if os.path.commonpath([abs_root, abs_dest]) != abs_root:
+        raise ValueError("dest_path must be inside the shared workspace")
+    return abs_dest
+
+
 class TelegramClient:
     """Thin wrapper around python-telegram-bot's Bot class.
 
@@ -393,6 +414,20 @@ class TelegramClient:
             self._save_offset()
 
         return updates
+
+    async def download_file(self, file_id: str, dest_path: str) -> None:
+        """Download a Telegram file to ``dest_path``.
+
+        ``dest_path`` must already be a safe, absolute path before calling.
+        """
+        try:
+            tg_file = await self.bot.get_file(file_id)
+            await tg_file.download_to_drive(
+                dest_path, read_timeout=TELEGRAM_DOWNLOAD_TIMEOUT
+            )
+        except TelegramError as exc:
+            logger.error("Failed to download file %s: %s", file_id, exc)
+            raise
 
     def _load_offset(self) -> int:
         if not self.offset_path:

@@ -1,16 +1,19 @@
 """FastAPI router exposing TelegramClient methods as HTTP endpoints."""
 
+import os
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query
 from telegram.error import TelegramError
 
 from telegram_api import BotManager
-from telegram_api.utils import transcribe_voice
+from telegram_api.utils import resolve_shared_path, transcribe_voice
 
 from .models import (
     BotsResponse,
     ChatIdsResponse,
+    DownloadFileRequest,
+    DownloadFileResponse,
     EditMessageRequest,
     GetUpdatesRequest,
     MessageResponse,
@@ -146,6 +149,27 @@ def create_router(bot_manager: BotManager) -> APIRouter:
         except TelegramError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @router.post("/{bot_name}/download_file", response_model=DownloadFileResponse)
+    async def download_file(bot_name: str, request: DownloadFileRequest) -> Dict[str, Any]:
+        try:
+            client = bot_manager.get_client(bot_name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            shared_root = os.getenv("SHARED_WORKSPACE_PATH", "/workspace/shared")
+            abs_path = resolve_shared_path(request.dest_path, shared_root)
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            await client.download_file(request.file_id, abs_path)
+            return {
+                "success": True,
+                "saved_path": abs_path,
+                "error": None,
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except TelegramError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     @router.post("/{bot_name}/edit_message", response_model=MessageResponse)
     async def edit_message(bot_name: str, request: EditMessageRequest) -> Dict[str, Any]:
         try:
@@ -182,12 +206,53 @@ def create_router(bot_manager: BotManager) -> APIRouter:
             )
             updates_list = []
             for update in updates:
+                file_info = None
                 if update.message and update.message.voice:
                     text = await transcribe_voice(update.message.voice, client.bot)
                     message_type = "voice"
                 elif update.message and update.message.text:
                     text = update.message.text
                     message_type = "text"
+                elif update.message and update.message.document:
+                    doc = update.message.document
+                    text = update.message.caption
+                    message_type = "document"
+                    file_info = {
+                        "file_id": doc.file_id,
+                        "file_name": getattr(doc, "file_name", None) or f"document_{update.update_id}",
+                        "mime_type": getattr(doc, "mime_type", None),
+                        "file_size": getattr(doc, "file_size", None),
+                    }
+                elif update.message and update.message.photo:
+                    text = update.message.caption
+                    message_type = "photo"
+                    photo = update.message.photo[-1]
+                    file_info = {
+                        "file_id": photo.file_id,
+                        "file_name": f"photo_{update.update_id}.jpg",
+                        "mime_type": "image/jpeg",
+                        "file_size": getattr(photo, "file_size", None),
+                    }
+                elif update.message and update.message.video:
+                    video = update.message.video
+                    text = update.message.caption
+                    message_type = "video"
+                    file_info = {
+                        "file_id": video.file_id,
+                        "file_name": getattr(video, "file_name", None) or f"video_{update.update_id}.mp4",
+                        "mime_type": getattr(video, "mime_type", None),
+                        "file_size": getattr(video, "file_size", None),
+                    }
+                elif update.message and update.message.audio:
+                    audio = update.message.audio
+                    text = update.message.caption
+                    message_type = "audio"
+                    file_info = {
+                        "file_id": audio.file_id,
+                        "file_name": getattr(audio, "file_name", None) or f"audio_{update.update_id}.mp3",
+                        "mime_type": getattr(audio, "mime_type", None),
+                        "file_size": getattr(audio, "file_size", None),
+                    }
                 else:
                     text = None
                     message_type = None
@@ -196,7 +261,7 @@ def create_router(bot_manager: BotManager) -> APIRouter:
                     if update.message and update.message.reply_to_message
                     else None
                 )
-                updates_list.append({
+                entry = {
                     "update_id": update.update_id,
                     "chat_id": (
                         update.effective_chat.id
@@ -206,7 +271,10 @@ def create_router(bot_manager: BotManager) -> APIRouter:
                     "message_type": message_type,
                     "text": text,
                     "reply_to_message_id": reply_to_message_id,
-                })
+                }
+                if file_info is not None:
+                    entry["file"] = file_info
+                updates_list.append(entry)
             return {
                 "success": True,
                 "updates": updates_list,

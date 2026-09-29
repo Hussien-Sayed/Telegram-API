@@ -132,21 +132,67 @@ class EditMessageRequest(BaseModel):
     kwargs: Optional[Dict[str, Any]] = None
 
 
+class FileInfo(BaseModel):
+    """Metadata about a file attachment in a Telegram update."""
+
+    file_id: str
+    file_name: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+
+
+class DownloadFileRequest(BaseModel):
+    """Request to download a Telegram file to the shared workspace."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "file_id": "ABC...",
+                "dest_path": "myproject/uploads/document.pdf",
+            }
+        }
+    )
+
+    file_id: str
+    dest_path: str
+
+    @field_validator("dest_path")
+    @classmethod
+    def validate_dest_path(cls, v: str) -> str:
+        """Validate that dest_path is a safe relative path."""
+        if not v:
+            raise ValueError("dest_path is required")
+        if v.startswith("/"):
+            raise ValueError("dest_path must be relative, not absolute")
+        if any(part == ".." for part in v.split("/")):
+            raise ValueError("dest_path must not contain '..'")
+        return v
+
+
+class DownloadFileResponse(BaseModel):
+    """Response from the download_file endpoint."""
+
+    success: bool
+    saved_path: Optional[str] = None
+    error: Optional[str] = None
+
+
 class UpdateEntry(BaseModel):
     """Single update entry returned by the get_updates endpoint."""
 
     update_id: int
     chat_id: Optional[int] = None
-    message_type: Optional[Literal["voice", "text"]] = None
+    message_type: Optional[Literal["voice", "text", "document", "photo", "video", "audio"]] = None
     text: Optional[str] = None
     reply_to_message_id: Optional[int] = None
+    file: Optional[FileInfo] = None
 
 
 class ChatIdEntry(BaseModel):
     """Single chat ID entry returned by the get_chat_ids endpoint."""
 
     chat_id: int
-    message_type: Optional[Literal["voice", "text"]] = None
+    message_type: Optional[Literal["voice", "text", "document", "photo", "video", "audio"]] = None
     text: Optional[str] = None
 
 
